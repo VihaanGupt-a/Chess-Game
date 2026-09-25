@@ -58,6 +58,9 @@ public class ChessBoard : MonoBehaviour
             ? lightColor
             : darkColor;
 
+        ChessSquare chessSquare = square.AddComponent<ChessSquare>();
+        chessSquare.Initialize(x, z);
+
         squares[x, z] = square;
     }
 }
