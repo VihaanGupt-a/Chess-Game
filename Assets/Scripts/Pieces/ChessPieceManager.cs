@@ -71,14 +71,6 @@ public class ChessPieceManager : MonoBehaviour
             0.6f
         );
 
-        ChessPiece chessPiece = piece.AddComponent<ChessPiece>();
-
-        piece.AddComponent<ChessPieceInteraction>();
-
-        chessPiece.Initialize(type, color, x, z);
-
-        ChessGameManager.Instance.RegisterPiece(chessPiece);
-
         Renderer renderer = piece.GetComponent<Renderer>();
 
         Material material = new Material(
@@ -90,6 +82,16 @@ public class ChessPieceManager : MonoBehaviour
             :Color.black;
 
         renderer.material = material;
+
+
+        ChessPiece chessPiece = piece.AddComponent<ChessPiece>();
+
+        piece.AddComponent<ChessPieceInteraction>();
+
+        chessPiece.Initialize(type, color, x, z);
+
+        ChessGameManager.Instance.RegisterPiece(chessPiece);
+
     }
 }
 

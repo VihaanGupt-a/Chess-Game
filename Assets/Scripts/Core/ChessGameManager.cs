@@ -69,11 +69,6 @@ public class ChessGameManager : MonoBehaviour
                 targetPiece
             );
 
-            if (validMove && targetPiece != null)
-            {
-                Destroy(targetPiece.gameObject);
-                pieces.Remove(targetPiece);
-            }
         }
 
         if (piece.Type == ChessPiece.PieceType.Pawn)
@@ -90,11 +85,6 @@ public class ChessGameManager : MonoBehaviour
                 middlePiece
             );
 
-            if (validMove && targetPiece != null)
-            {
-                Destroy(targetPiece.gameObject);
-                pieces.Remove(targetPiece);
-            }
         }
 
         if (piece.Type == ChessPiece.PieceType.Rook)
@@ -109,11 +99,6 @@ public class ChessGameManager : MonoBehaviour
                 FindPieceAt
             );
 
-            if (validMove && targetPiece != null)
-            {
-                Destroy(targetPiece.gameObject);
-                pieces.Remove(targetPiece);
-            }
         }
 
         if (piece.Type == ChessPiece.PieceType.Bishop)
@@ -128,11 +113,6 @@ public class ChessGameManager : MonoBehaviour
                 FindPieceAt
             );
 
-            if (validMove && targetPiece != null)
-            {
-                Destroy(targetPiece.gameObject);
-                pieces.Remove(targetPiece);
-            }
         }
 
         if (piece.Type == ChessPiece.PieceType.Queen)
@@ -147,11 +127,6 @@ public class ChessGameManager : MonoBehaviour
                 FindPieceAt
             );
 
-            if (validMove && targetPiece != null)
-            {
-                Destroy(targetPiece.gameObject);
-                pieces.Remove(targetPiece);
-            }
         }
 
         if (piece.Type == ChessPiece.PieceType.King)
@@ -165,17 +140,31 @@ public class ChessGameManager : MonoBehaviour
                 targetPiece
             );
 
-            if (validMove && targetPiece != null)
-            {
-                Destroy(targetPiece.gameObject);
-                pieces.Remove(targetPiece);
-            }
         }
 
         if (!validMove)
         {
             Debug.Log($"Invalid {piece.Type} Move!");
             return;
+        }
+
+        if (WouldBeInCheck(piece, targetX, targetZ))
+        {
+            Debug.Log("Illegal move! Your king would be in check.");
+            return;
+        }
+
+        ChessPiece capturedPiece = FindPieceAt(targetX, targetZ);
+
+        if (capturedPiece != null)
+        {
+            if (!CaptureRules.CanCapture(piece, capturedPiece))
+            {
+                Debug.Log("This piece can't be captured!");
+                return;
+            }
+            
+            CapturePiece(capturedPiece);
         }
 
         MovePiece(piece, targetX, targetZ);
@@ -204,6 +193,27 @@ public class ChessGameManager : MonoBehaviour
             : ChessPiece.PieceColor.White;
 
         Debug.Log($"Turn changed to {currentTurn}");
+
+        if (IsCheckMate(currentTurn))
+        {
+            Debug.Log($"CHECKMATE! {currentTurn} has been checkmated");
+        }
+        else if (IsInCheck(currentTurn))
+        {
+            Debug.Log($"{currentTurn} is in CHECK!");
+        }
+
+    }
+
+    private void CapturePiece(ChessPiece piece)
+    {
+        if (piece == null)
+            return;
+
+        pieces.Remove(piece);
+        Destroy(piece.gameObject);
+
+        Debug.Log($"{piece.Color} {piece.Type} was captured!");
     }
 
     private ChessPiece FindPieceAt(int x, int z)
@@ -217,9 +227,79 @@ public class ChessGameManager : MonoBehaviour
         }
         return null;
     }
+
+    private ChessPiece FindKing(
+        ChessPiece.PieceColor color
+    )
+    {
+        foreach (ChessPiece piece in pieces)
+        {
+            if (piece.Type == ChessPiece.PieceType.King && piece.Color == color)
+            {
+                return piece;
+            }
+        }
+
+        return null;
+    }
+
+    private bool IsInCheck(ChessPiece.PieceColor color)
+    {
+        ChessPiece king = FindKing(color);
+
+        if (king == null)
+            return false;
+
+        ChessPiece.PieceColor enemyColor = color == ChessPiece.PieceColor.White
+            ? ChessPiece.PieceColor.Black
+            : ChessPiece.PieceColor.White;
+
+        return ChessRules.IsSquareUnderAttack(
+            king.BoardX,
+            king.BoardZ,
+            enemyColor,
+            pieces
+        );
+    }
+
+    private bool IsCheckMate(ChessPiece.PieceColor color)
+    {
+        if (!IsInCheck(color))
+        {
+            return false;
+        }
+
+        return !CheckmateRules.HasAnyLegalMove(color, pieces, FindPieceAt, WouldBeInCheck);
+    }
+
+    private bool WouldBeInCheck(ChessPiece piece, int targetX, int targetZ)
+    {
+        int originalX = piece.BoardX;
+        int originalZ = piece.BoardZ;
+
+        ChessPiece capturedPiece = FindPieceAt(targetX, targetZ);
+
+        piece.BoardX = targetX;
+        piece.BoardZ = targetZ;
+
+        if (capturedPiece != null)
+        {
+            pieces.Remove(capturedPiece);
+        }
+
+        bool inCheck = IsInCheck(piece.Color);
+
+        if (capturedPiece != null)
+        {
+            pieces.Add(capturedPiece);
+        }
+
+        piece.BoardX = originalX;
+        piece.BoardZ = originalZ;
+
+        return inCheck;
+    }
 }
-
-
 
 
 
