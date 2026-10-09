@@ -91,14 +91,29 @@ public class ChessPieceManager : MonoBehaviour
 
         piece.name = $"{color}_{type}";
 
-        Renderer renderer = piece.GetComponent<Renderer>();
-
-        if (renderer != null)
+        if (piece.GetComponent<Collider>() == null)
         {
-            renderer.material.color = color == ChessPiece.PieceColor.White
-                ? Color.white
-                : Color.black;
+            piece.AddComponent<CapsuleCollider>();
         }
+
+        Renderer[] renderers = piece.GetComponentsInChildren<Renderer>();
+
+        Color pieceColor = color == ChessPiece.PieceColor.White
+            ? new Color(0.92f, 0.92f, 0.92f)
+            : new Color(0.12f, 0.12f, 0.12f);
+
+        foreach (Renderer pieceRenderer in renderers)
+        {
+            Material[] materials = pieceRenderer.materials;
+
+            for (int i = 0; i < materials.Length; i++)
+            {
+                materials[i].color = pieceColor;
+            }
+
+            pieceRenderer.materials = materials;
+        }
+        
 
         ChessPiece chessPiece = piece.GetComponent<ChessPiece>();
 
