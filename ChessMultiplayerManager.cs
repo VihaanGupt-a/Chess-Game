@@ -1,10 +1,15 @@
 using System;
+using System.Threading.Tasks;
 using UnityEngine;
 using Unity.Services.Core;
 using Unity.Services.Authentication;
+using Unity.Services.Multiplayer;
 
-public class ChessMultiPlayerManager : MonoBehaviour
+public class ChessMultiplayerManager : MonoBehaviour
 {
+
+    private ISession currentSession;
+
     private async void Start()
     {
         try
@@ -26,4 +31,38 @@ public class ChessMultiPlayerManager : MonoBehaviour
             Debug.LogError($"Multiplayer Initialization failed : {e}");
         }
     }
+
+    public async Task CreateRoom()
+    {
+        try
+        {
+            var options = new SessionOptions
+            {
+                MaxPlayers = 2
+            }.WithRelayNetwork();
+
+            currentSession = await MultiplayerService.Instance.CreateSessionAsync(options);
+
+            Debug.Log($"Room Created! Code: {currentSession.Code}");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Could not create room: {e}");
+        }
+    }
+
+    public async Task JoinRoom(string roomCode)
+    {
+        try
+        {
+            currentSession = await MultiplayerService.Instance.JoinSessionByCodeAsync(roomCode);
+            Debug.Log($"Joined room: {currentSession.Code}");
+        }
+
+        catch (Exception e)
+        {
+            Debug.LogError($"Could not join room: {e}");
+        }
+    }
+
 }
