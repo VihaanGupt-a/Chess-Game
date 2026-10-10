@@ -1,6 +1,7 @@
 using UnityEngine;
+using Unity.Netcode;
 
-public class ChessPieceManager : MonoBehaviour
+public class ChessPieceManager : NetworkBehaviour
 {
     [SerializeField] private ChessBoard board;
 
@@ -11,10 +12,21 @@ public class ChessPieceManager : MonoBehaviour
     [SerializeField] private GameObject queenPrefab;
     [SerializeField] private GameObject kingPrefab;
 
-    private void Start()
+    private bool piecesSpawned;
+
+    public override void OnNetworkSpawn()
     {
+        if (!IsServer || piecesSpawned)
+            return;
+
+        piecesSpawned = true;
         SetupPieces();
     }
+
+    // private void Start()
+    // {
+    //     SetupPieces();
+    // }
 
     private void SetupPieces()
     {
@@ -81,52 +93,30 @@ public class ChessPieceManager : MonoBehaviour
             return;
         }
 
-        GameObject piece = Instantiate(
+        GameObject pieceObject = Instantiate(
             prefab,
             new Vector3(x-3.5f, 0f, z-3.5f),
             Quaternion.identity
         );
 
-        piece.transform.localScale = Vector3.one * 0.3f;
+        NetworkObject networkObject = pieceObject.GetComponent<NetworkObject>();
+        NetworkChessPiece networkPiece = pieceObject.GetComponent<NetworkChessPiece>();
 
-        piece.name = $"{color}_{type}";
-
-        if (piece.GetComponent<Collider>() == null)
+        if (networkObject == null || networkPiece == null)
         {
-            piece.AddComponent<CapsuleCollider>();
+            Debug.LogError($"Network component missing on {prefab.name}!");
+            Destroy(pieceObject);
+            return;
         }
 
-        Renderer[] renderers = piece.GetComponentsInChildren<Renderer>();
+        networkPiece.BoardX.Value = x;
+        networkPiece.BoardZ.Value = z;
+        networkPiece.PieceType.Value = (int)type;
+        networkPiece.PieceColor.Value = (int)color;
 
-        Color pieceColor = color == ChessPiece.PieceColor.White
-            ? new Color(0.92f, 0.92f, 0.92f)
-            : new Color(0.12f, 0.12f, 0.12f);
+        pieceObject.name = $"{color}_{type}";
 
-        foreach (Renderer pieceRenderer in renderers)
-        {
-            Material[] materials = pieceRenderer.materials;
-
-            for (int i = 0; i < materials.Length; i++)
-            {
-                materials[i].color = pieceColor;
-            }
-
-            pieceRenderer.materials = materials;
-        }
-        
-
-        ChessPiece chessPiece = piece.GetComponent<ChessPiece>();
-
-        if (chessPiece == null)
-            chessPiece = piece.AddComponent<ChessPiece>();
-
-        if (piece.GetComponent<ChessPieceInteraction>() == null)
-            piece.AddComponent<ChessPieceInteraction>();
-
-        chessPiece.Initialize(type, color, x, z);
-
-        ChessGameManager.Instance.RegisterPiece(chessPiece);
-
+        networkObject.Spawn();
     }
 }
 

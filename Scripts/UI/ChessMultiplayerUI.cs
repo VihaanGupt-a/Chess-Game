@@ -57,6 +57,15 @@ public class ChessMultiplayerUI : MonoBehaviour
 
         roomCodeText.text = "Joining room...";
         await manager.JoinRoom(code);
+
+        if (manager.IsInSession)
+        {
+            roomCodeText.text = "Joined Room: " + code;
+        }
+        else
+        {
+            roomCodeText.text = "Failed to join the room. Check console!";
+        }
     }
 
     private void ShowRoomCode(string code)

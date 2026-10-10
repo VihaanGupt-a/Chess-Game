@@ -1,15 +1,18 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Netcode;
 
-public class ChessGameManager : MonoBehaviour 
+public class ChessGameManager : NetworkBehaviour 
 {
     public static ChessGameManager Instance {get; private set;}
 
     private ChessPieceInteraction selectedPiece;
 
-    private ChessPiece.PieceColor currentTurn = ChessPiece.PieceColor.White;
+    private NetworkVariable<int> currentTurn = new NetworkVariable<int>((int)ChessPiece.PieceColor.White);
 
     private List<ChessPiece> pieces = new List<ChessPiece>();
+
+    private ChessMultiplayerManager multiplayerManager;
 
     private void Awake()
     {
@@ -20,6 +23,7 @@ public class ChessGameManager : MonoBehaviour
         }
 
         Instance = this;
+        multiplayerManager = FindAnyObjectByType<ChessMultiplayerManager>();
     }
 
     public void RegisterPiece(ChessPiece piece)
@@ -34,7 +38,7 @@ public class ChessGameManager : MonoBehaviour
     {
         ChessPiece chessPiece = piece.GetPiece();
 
-        if (chessPiece.Color != currentTurn)
+        if ((int)chessPiece.Color != currentTurn.Value)
         {
             Debug.Log("It's not your turn!");
             return;
@@ -172,14 +176,21 @@ public class ChessGameManager : MonoBehaviour
 
     private void MovePiece(ChessPiece piece , int targetX, int targetZ)
     {
-        piece.BoardX = targetX;
-        piece.BoardZ = targetZ;
+        NetworkChessPiece networkPiece = piece.GetComponent<NetworkChessPiece>();
 
-        piece.transform.position = new Vector3(
-            targetX - 3.5f,
-            0.3f,
-            targetZ - 3.5f
-        );
+        if (networkPiece == null)
+        {
+            Debug.LogError("NetworkChessPiece component not found!");
+            return;
+        }
+
+        networkPiece.RequestMoveServerRpc(targetX, targetZ);
+
+        // piece.transform.position = new Vector3(
+        //     targetX - 3.5f,
+        //     0f,
+        //     targetZ - 3.5f
+        // );
 
         selectedPiece.Deselect();
         selectedPiece = null;
@@ -188,17 +199,20 @@ public class ChessGameManager : MonoBehaviour
             $"Moved {piece.Color} {piece.Type} to {targetX}, {targetZ}"
         );
 
-        currentTurn = currentTurn == ChessPiece.PieceColor.White
-            ? ChessPiece.PieceColor.Black
-            : ChessPiece.PieceColor.White;
-
-        Debug.Log($"Turn changed to {currentTurn}");
-
-        if (IsCheckMate(currentTurn))
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
         {
-            Debug.Log($"CHECKMATE! {currentTurn} has been checkmated");
+            currentTurn.Value = currentTurn.Value == (int)ChessPiece.PieceColor.White
+                ?(int)ChessPiece.PieceColor.Black
+                :(int)ChessPiece.PieceColor.White;
         }
-        else if (IsInCheck(currentTurn))
+
+        Debug.Log($"Turn changed to {(ChessPiece.PieceColor)currentTurn.Value}");
+
+        if (IsCheckMate((ChessPiece.PieceColor)currentTurn.Value))
+        {
+            Debug.Log($"CHECKMATE! {(ChessPiece.PieceColor)currentTurn.Value} has been checkmated");
+        }
+        else if (IsInCheck((ChessPiece.PieceColor)currentTurn.Value))
         {
             Debug.Log($"{currentTurn} is in CHECK!");
         }
@@ -210,8 +224,16 @@ public class ChessGameManager : MonoBehaviour
         if (piece == null)
             return;
 
+        NetworkChessPiece networkPiece = piece.GetComponent<NetworkChessPiece>();
+
+        if (networkPiece == null)
+        {
+            Debug.LogError("NetworkChessPiece not found on captured piece!");
+            return;
+        }
+
         pieces.Remove(piece);
-        Destroy(piece.gameObject);
+        networkPiece.CaptureOnServer();
 
         Debug.Log($"{piece.Color} {piece.Type} was captured!");
     }

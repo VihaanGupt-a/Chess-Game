@@ -9,6 +9,8 @@ public class ChessMultiplayerManager : MonoBehaviour
 {
 
     private ISession currentSession;
+    public bool IsInSession => currentSession != null;
+    
     public System.Action<string> RoomCodeCreated;
 
     private async void Start()
