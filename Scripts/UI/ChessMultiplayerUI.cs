@@ -4,6 +4,8 @@ using TMPro;
 public class ChessMultiplayerUI : MonoBehaviour
 {
     [SerializeField] private TMP_Text roomCodeText;
+    [SerializeField] private TMP_InputField joinRoomInput;
+
     private ChessMultiplayerManager manager;
 
     private void Start()
@@ -40,9 +42,27 @@ public class ChessMultiplayerUI : MonoBehaviour
         await manager.CreateRoom();
     }
 
+    public async void OnJoinRoomClicked()
+    {
+        if (manager == null || joinRoomInput == null)
+            return;
+
+        string code = joinRoomInput.text.Trim().ToUpperInvariant();
+
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            roomCodeText.text = "Enter a room code first."; 
+            return;
+        }
+
+        roomCodeText.text = "Joining room...";
+        await manager.JoinRoom(code);
+    }
+
     private void ShowRoomCode(string code)
     {
-        roomCodeText.text = "Room Code: " + code;
+        if (roomCodeText != null)
+            roomCodeText.text = "Room Code: " + code;
     }
 }
 
