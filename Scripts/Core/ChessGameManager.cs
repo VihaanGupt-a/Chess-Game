@@ -10,6 +10,12 @@ public class ChessGameManager : NetworkBehaviour
 
     private NetworkVariable<int> currentTurn = new NetworkVariable<int>((int)ChessPiece.PieceColor.White);
 
+    private const ulong UnassignedClientId = ulong.MaxValue;
+
+    private NetworkVariable<ulong> whitePlayerClientId = new NetworkVariable<ulong> (UnassignedClientId);
+
+    private NetworkVariable<ulong> blackPlayerClientId = new NetworkVariable<ulong> (UnassignedClientId);
+
     private List<ChessPiece> pieces = new List<ChessPiece>();
 
     private ChessMultiplayerManager multiplayerManager;
@@ -26,6 +32,91 @@ public class ChessGameManager : NetworkBehaviour
         multiplayerManager = FindAnyObjectByType<ChessMultiplayerManager>();
     }
 
+    public override void OnNetworkSpawn()
+    {
+        if (!IsServer || NetworkManager.Singleton == null)
+            return;
+
+        NetworkManager.Singleton.OnClientConnectedCallback += AssignPlayerColor;
+
+        foreach (ulong clientId in NetworkManager.Singleton.ConnectedClientsIds)
+        {
+            AssignPlayerColor(clientId);
+        }
+
+        Debug.Log("ChessGameManager spawned on server.");
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        if (IsServer && NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.OnClientConnectedCallback -= AssignPlayerColor;
+        }
+    }
+
+    private void AssignPlayerColor(ulong clientId)
+    {
+        if (!IsServer)
+            return;
+
+        if (whitePlayerClientId.Value == clientId || blackPlayerClientId.Value == clientId)
+        {
+            return;
+        }
+
+        if (whitePlayerClientId.Value == UnassignedClientId)
+        {
+            whitePlayerClientId.Value = clientId;
+            Debug.Log($"Player {clientId} assigned WHITE.");
+        }
+        else if (blackPlayerClientId.Value == UnassignedClientId)
+        {
+            blackPlayerClientId.Value = clientId;
+            Debug.Log($"Player {clientId} assigned BLACk.");
+        }
+        else
+        {
+            Debug.LogWarning($"No chess color available for client {clientId}");
+        }
+    }
+
+    private bool TryGetLocalPlayerColor(out ChessPiece.PieceColor color)
+    {
+        color = default;
+
+        if (NetworkManager.Singleton == null)
+            return false;
+
+        ulong localClientId = NetworkManager.Singleton.LocalClientId;
+
+        if (localClientId == whitePlayerClientId.Value)
+        {
+            color = ChessPiece.PieceColor.White;
+            return true;
+        }
+
+        if (localClientId == blackPlayerClientId.Value)
+        {
+            color = ChessPiece.PieceColor.Black;
+            return true;
+        }
+
+        return false;
+    }
+
+    public void AdvanceTurnOnServer()
+    {
+        if (!IsServer)
+            return;
+
+        currentTurn.Value = currentTurn.Value == (int)ChessPiece.PieceColor.White
+                ?(int)ChessPiece.PieceColor.Black
+                :(int)ChessPiece.PieceColor.White;
+
+        Debug.Log($"Turn changed to {(ChessPiece.PieceColor)currentTurn.Value}");
+    }
+
     public void RegisterPiece(ChessPiece piece)
     {
         if (!pieces.Contains(piece))
@@ -36,18 +127,34 @@ public class ChessGameManager : NetworkBehaviour
 
     public void SelectPiece(ChessPieceInteraction piece)
     {
+        if (piece == null)
+            return;
+
         ChessPiece chessPiece = piece.GetPiece();
+
+        if (chessPiece == null)
+            return;
+
+        if (!TryGetLocalPlayerColor(out ChessPiece.PieceColor localColor))
+        {
+            Debug.LogWarning("Your player color has not been assigned.");
+            return;
+        }
+
+        if (chessPiece.Color != localColor)
+        {
+            Debug.Log($"You are {localColor}. You cannot select {chessPiece.Color} pieces.");
+            return;
+        }
 
         if ((int)chessPiece.Color != currentTurn.Value)
         {
-            Debug.Log("It's not your turn!");
+            Debug.Log($"It is {(ChessPiece.PieceColor)currentTurn.Value}'s turn.");
             return;
         }
 
         if (selectedPiece != null)
-        {
             selectedPiece.Deselect();
-        }
 
         selectedPiece = piece;
         selectedPiece.Select();
@@ -199,14 +306,12 @@ public class ChessGameManager : NetworkBehaviour
             $"Moved {piece.Color} {piece.Type} to {targetX}, {targetZ}"
         );
 
-        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
-        {
-            currentTurn.Value = currentTurn.Value == (int)ChessPiece.PieceColor.White
-                ?(int)ChessPiece.PieceColor.Black
-                :(int)ChessPiece.PieceColor.White;
-        }
+        // if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
+        // {
+            
+        // }
 
-        Debug.Log($"Turn changed to {(ChessPiece.PieceColor)currentTurn.Value}");
+        // Debug.Log($"Turn changed to {(ChessPiece.PieceColor)currentTurn.Value}");
 
         if (IsCheckMate((ChessPiece.PieceColor)currentTurn.Value))
         {

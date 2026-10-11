@@ -135,6 +135,15 @@ public class NetworkChessPiece : NetworkBehaviour
 
         BoardX.Value = x;
         BoardZ.Value = z;
+
+        if (ChessGameManager.Instance != null)
+        {
+            ChessGameManager.Instance.AdvanceTurnOnServer();
+        }
+        else
+        {
+            Debug.LogError("ChessGameManager instance not found.");
+        }
     }
 
     public void CaptureOnServer()
