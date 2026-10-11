@@ -70,7 +70,7 @@ public class CapturedPiecesHolder : MonoBehaviour
         {
             Debug.LogError("Cannot find a compatible tray shader.");
         }
-        
+
     }
 
     public Vector2Int GetCapturedSlot(ChessPiece.PieceColor pieceColor)
@@ -92,7 +92,7 @@ public class CapturedPiecesHolder : MonoBehaviour
         {
             index = blackCapturedCount++;
             column = index / 8;
-            row = index % 8;
+            row = 7 - (index % 8);
 
             x = 8 + column;
         }

@@ -67,7 +67,7 @@ public partial class ChessGameManager
             if (!CaptureRules.CanCapture(piece, capturedPiece))
                 return false;
 
-            CapturePiece(capturedPiece);
+            CapturePiece(capturedPiece, piece.Color);
         }
 
         piece.BoardX = targetX;
@@ -92,6 +92,27 @@ public partial class ChessGameManager
             Debug.Log($"{nextTurn} is in CHECk.");
 
         return true;
+
+    }
+
+    private void CapturePiece(ChessPiece capturedPiece, ChessPiece.PieceColor capturingPlayerColor)
+    {
+        if (capturedPiece == null)
+            return;
+
+        NetworkChessPiece networkPiece = capturedPiece.GetComponent<NetworkChessPiece>();
+
+        if (networkPiece == null)
+        {
+            Debug.LogError("NetworkChessPiece missing from captured piece!");
+            return;
+        }
+
+        pieces.Remove(capturedPiece);
+
+        networkPiece.CaptureOnServer(capturingPlayerColor);
+        
+        Debug.Log($"{capturingPlayerColor} captured" + $"{capturedPiece.Color} {capturedPiece.Type}.");
 
     }
 
