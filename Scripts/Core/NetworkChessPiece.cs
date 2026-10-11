@@ -125,24 +125,24 @@ public class NetworkChessPiece : NetworkBehaviour
     }
 
     [ServerRpc(RequireOwnership = false)]
-    public void RequestMoveServerRpc(int x, int z)
+    public void RequestMoveServerRpc(int x, int z, ServerRpcParams rpcParams = default)
     {
         if (!IsServer)
             return;
 
-        if (x < 0 || x > 7 || z < 0 || z > 7)
+        if (ChessGameManager.Instance == null)
+        {
+            Debug.LogError("ChessGameManager instance not found on Server.");
             return;
-
-        BoardX.Value = x;
-        BoardZ.Value = z;
-
-        if (ChessGameManager.Instance != null)
-        {
-            ChessGameManager.Instance.AdvanceTurnOnServer();
         }
-        else
+        
+        ulong senderClientId = rpcParams.Receive.SenderClientId;
+
+        bool accepted = ChessGameManager.Instance.ProcessMoveOnServer(this, x, z, senderClientId);
+
+        if (!accepted)
         {
-            Debug.LogError("ChessGameManager instance not found.");
+            Debug.LogWarning($"Server rejected move request from client {senderClientId}.");
         }
     }
 

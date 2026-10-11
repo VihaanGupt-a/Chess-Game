@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Unity.Netcode;
 
-public class ChessGameManager : NetworkBehaviour 
+public partial class ChessGameManager : NetworkBehaviour 
 {
     public static ChessGameManager Instance {get; private set;}
 
@@ -167,118 +167,25 @@ public class ChessGameManager : NetworkBehaviour
 
         ChessPiece piece = selectedPiece.GetPiece();
 
-        bool validMove = false;
-
-        if (piece.Type == ChessPiece.PieceType.Knight)
+        if (piece == null)
         {
-            ChessPiece targetPiece = FindPieceAt(targetX, targetZ);
-
-            validMove = KnightRules.IsValidMove(
-                piece,
-                targetX,
-                targetZ,
-                targetPiece
-            );
-
-        }
-
-        if (piece.Type == ChessPiece.PieceType.Pawn)
-        {
-            ChessPiece targetPiece = FindPieceAt(targetX, targetZ);
-    
-            ChessPiece middlePiece = FindPieceAt(piece.BoardX, piece.BoardZ + (piece.Color == ChessPiece.PieceColor.White ? 1 : -1));
-
-            validMove = PawnRules.IsValidMove(
-                piece,
-                targetX,
-                targetZ,
-                targetPiece,
-                middlePiece
-            );
-
-        }
-
-        if (piece.Type == ChessPiece.PieceType.Rook)
-        {
-            ChessPiece targetPiece = FindPieceAt(targetX, targetZ);
-    
-            validMove = RookRules.IsValidMove(
-                piece,
-                targetX,
-                targetZ,
-                targetPiece,
-                FindPieceAt
-            );
-
-        }
-
-        if (piece.Type == ChessPiece.PieceType.Bishop)
-        {
-            ChessPiece targetPiece = FindPieceAt(targetX, targetZ);
-    
-            validMove = BishopRules.IsValidMove(
-                piece,
-                targetX,
-                targetZ,
-                targetPiece,
-                FindPieceAt
-            );
-
-        }
-
-        if (piece.Type == ChessPiece.PieceType.Queen)
-        {
-            ChessPiece targetPiece = FindPieceAt(targetX, targetZ);
-    
-            validMove = QueenRules.IsValidMove(
-                piece,
-                targetX,
-                targetZ,
-                targetPiece,
-                FindPieceAt
-            );
-
-        }
-
-        if (piece.Type == ChessPiece.PieceType.King)
-        {
-            ChessPiece targetPiece = FindPieceAt(targetX, targetZ);
-    
-            validMove = KingRules.IsValidMove(
-                piece,
-                targetX,
-                targetZ,
-                targetPiece
-            );
-
-        }
-
-        if (!validMove)
-        {
-            Debug.Log($"Invalid {piece.Type} Move!");
             return;
         }
 
-        if (WouldBeInCheck(piece, targetX, targetZ))
+        NetworkChessPiece networkPiece = piece.GetComponent<NetworkChessPiece>();
+
+        if (networkPiece == null)
         {
-            Debug.Log("Illegal move! Your king would be in check.");
+            Debug.LogError("NetworkChessPiece component not found.");
             return;
         }
 
-        ChessPiece capturedPiece = FindPieceAt(targetX, targetZ);
+        networkPiece.RequestMoveServerRpc(targetX, targetZ);
 
-        if (capturedPiece != null)
-        {
-            if (!CaptureRules.CanCapture(piece, capturedPiece))
-            {
-                Debug.Log("This piece can't be captured!");
-                return;
-            }
-            
-            CapturePiece(capturedPiece);
-        }
+        selectedPiece.Deselect();
+        selectedPiece = null;
 
-        MovePiece(piece, targetX, targetZ);
+        Debug.Log($"Submitted move request: {piece.Color} {piece.Type} to ({targetX}, {targetZ}).");
     }
 
     private void MovePiece(ChessPiece piece , int targetX, int targetZ)
