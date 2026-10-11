@@ -47,6 +47,11 @@ public class NetworkChessPiece : NetworkBehaviour
 
         PieceType.OnValueChanged -= OnPieceDataChanged;
         PieceColor.OnValueChanged -= OnPieceDataChanged;
+
+        if (chessPiece != null && ChessGameManager.Instance != null)
+        {
+            ChessGameManager.Instance.UnregisterPiece(chessPiece);
+        }
     }
 
     private void OnPositionChanged(int previous, int current)
