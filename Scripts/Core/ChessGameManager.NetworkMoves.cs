@@ -111,7 +111,7 @@ public partial class ChessGameManager
         pieces.Remove(capturedPiece);
 
         networkPiece.CaptureOnServer(capturingPlayerColor);
-        
+
         Debug.Log($"{capturingPlayerColor} captured" + $"{capturedPiece.Color} {capturedPiece.Type}.");
 
     }
@@ -153,6 +153,27 @@ public partial class ChessGameManager
         if (piece != null)
             pieces.Remove(piece);
     }
+
+    public bool TryGetAssignedPlayerColor(
+        ulong clientId,
+        out ChessPiece.PieceColor color)
+    {
+        color = default;
+
+        if (clientId == whitePlayerClientId.Value)
+        {
+            color = ChessPiece.PieceColor.White;
+            return true;
+        }
+
+        if (clientId == blackPlayerClientId.Value)
+        {
+            color = ChessPiece.PieceColor.Black;
+            return true;
+        }
+
+        return false;
+    } 
 }
 
 

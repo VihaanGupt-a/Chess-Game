@@ -135,6 +135,17 @@ public partial class ChessGameManager : NetworkBehaviour
         if (chessPiece == null)
             return;
 
+        if (selectedPiece != null)
+        {
+            ChessPiece selectedChessPiece = selectedPiece.GetPiece();
+
+            if (selectedChessPiece != null && selectedChessPiece != chessPiece && selectedChessPiece.Color != chessPiece.Color) 
+            {
+                TryMoveSelected(chessPiece.BoardX, chessPiece.BoardZ);
+                return;
+            }
+        }
+
         if (!TryGetLocalPlayerColor(out ChessPiece.PieceColor localColor))
         {
             Debug.LogWarning("Your player color has not been assigned.");
