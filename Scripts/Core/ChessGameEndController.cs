@@ -336,8 +336,6 @@ public class ChessGameEndController : NetworkBehaviour
     }
 
 
-
-
 }
 
 
