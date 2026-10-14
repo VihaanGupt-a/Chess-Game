@@ -3,10 +3,12 @@ using Unity.Netcode;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using System.Threading.Tasks;
 
 public class ChessGameEndController : NetworkBehaviour
 {
     public static ChessGameEndController Instance { get; private set; }
+    private bool returningToLobby = false;
     private const ulong NoOffer = ulong.MaxValue;
 
     private const int Playing = 0;
@@ -34,6 +36,11 @@ public class ChessGameEndController : NetworkBehaviour
     [Header("Text")]
     [SerializeField] private TMP_Text drawOfferText;
     [SerializeField] private TMP_Text gameResultText;
+
+    [Header("Navigation")]
+    [SerializeField] private GameObject lobbyPanel;
+    [SerializeField] private GameObject inGamePanel;
+    [SerializeField] private ChessMultiplayerManager multiplayerManager;
 
     private readonly NetworkVariable<int> gameState = new NetworkVariable<int>(Playing);
 
@@ -63,6 +70,7 @@ public class ChessGameEndController : NetworkBehaviour
         // }
 
         gameState.OnValueChanged += OnGameStateChanged;
+        resultReason.OnValueChanged += OnResultReasonChanged;
 
         UpdateUI();
     }
@@ -70,6 +78,7 @@ public class ChessGameEndController : NetworkBehaviour
     public override void OnNetworkDespawn()
     {
         gameState.OnValueChanged -= OnGameStateChanged;
+        resultReason.OnValueChanged -= OnResultReasonChanged;
     }
 
     private void OnGameStateChanged(int previousValue, int newValue)
@@ -79,7 +88,26 @@ public class ChessGameEndController : NetworkBehaviour
               $"IsClient={IsClient}, LocalClient={NetworkManager.Singleton?.LocalClientId}");
 
         UpdateUI();
+        CheckAutoReturnToLobby();
     }
+
+    public void OnResultReasonChanged(int previousValue, int newValue)
+    {
+        CheckAutoReturnToLobby();
+    }
+
+    private void CheckAutoReturnToLobby()
+    {
+        bool drawAccepted = gameState.Value == DrawAgreed;
+
+        bool resignation = (gameState.Value == WhiteWon || gameState.Value == BlackWon) && resultReason.Value == Resignation;
+
+        if (drawAccepted || resignation)
+        {
+            ReturnToLobbyAfterGameEnd();
+        }
+    }
+
 
     private void Start()
     {
@@ -97,6 +125,11 @@ public class ChessGameEndController : NetworkBehaviour
 
         if (playAgainButton != null)
             playAgainButton.onClick.AddListener(PlayAgain);
+
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnected;
+        }
 
         UpdateUI();
     }
@@ -126,6 +159,11 @@ public class ChessGameEndController : NetworkBehaviour
 
         if (Instance == this)
             Instance = null;
+
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.OnClientDisconnectCallback -= HandleClientDisconnected;
+        }
     }
 
     private void OfferDraw()
@@ -152,10 +190,38 @@ public class ChessGameEndController : NetworkBehaviour
             ResignServerRpc();
     }
 
-    private void PlayAgain()
+    private async void PlayAgain()
     {
-        if (IsSpawned)
-            RestartGameServerRpc();
+        try
+        {
+            if (multiplayerManager == null)
+            {
+                multiplayerManager = FindAnyObjectByType<ChessMultiplayerManager> ();
+            }
+
+            if (multiplayerManager != null)
+            {
+                await multiplayerManager.LeaveRoom();
+            }
+            else if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            {
+                NetworkManager.Singleton.Shutdown();
+            }
+        }
+
+        finally
+        {
+            ShowLobbyPanels();
+        }
+    }
+
+    private void ShowLobbyPanels()
+    {
+        if (inGamePanel != null)
+            inGamePanel.SetActive(false);
+
+        if (lobbyPanel != null)
+            lobbyPanel.SetActive(true);
     }
 
 
@@ -262,30 +328,30 @@ public class ChessGameEndController : NetworkBehaviour
         Debug.Log($"{playerColor} resigned!");
     }
 
-    [ServerRpc(RequireOwnership = false)]
-    private void RestartGameServerRpc(ServerRpcParams rpcParams = default)
-    {
-        if (!IsServer || !IsGameOver())
-            return;
+    // [ServerRpc(RequireOwnership = false)]
+    // private void RestartGameServerRpc(ServerRpcParams rpcParams = default)
+    // {
+    //     if (!IsServer || !IsGameOver())
+    //         return;
 
-        if (!IsAssignedPlayer(rpcParams.Receive.SenderClientId))
-            return;
+    //     if (!IsAssignedPlayer(rpcParams.Receive.SenderClientId))
+    //         return;
 
-        if (NetworkManager.Singleton == null || NetworkManager.Singleton.SceneManager == null)
-        {
-            Debug.Log("Network scene management is unavailable!");
-            return;
-        }
+    //     if (NetworkManager.Singleton == null || NetworkManager.Singleton.SceneManager == null)
+    //     {
+    //         Debug.Log("Network scene management is unavailable!");
+    //         return;
+    //     }
 
-        string sceneName = SceneManager.GetActiveScene().name;
+    //     string sceneName = SceneManager.GetActiveScene().name;
 
-        var status = NetworkManager.Singleton.SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
+    //     var status = NetworkManager.Singleton.SceneManager.LoadScene(sceneName, LoadSceneMode.Single);
 
-        if (status != SceneEventProgressStatus.Started)
-        {
-            Debug.LogError($"Could not restart the match. Status: {status}.");
-        }
-    }
+    //     if (status != SceneEventProgressStatus.Started)
+    //     {
+    //         Debug.LogError($"Could not restart the match. Status: {status}.");
+    //     }
+    // }
 
 
 
@@ -392,8 +458,6 @@ public class ChessGameEndController : NetworkBehaviour
         }
 
     }
-
-
     
     private void SetActiveIfNeeded(GameObject target, bool shouldBeActive)
     {
@@ -401,7 +465,82 @@ public class ChessGameEndController : NetworkBehaviour
             target.SetActive(shouldBeActive);
     }
 
+    private async void HandleClientDisconnected(ulong clientId)
+    {
+        NetworkManager networkManager = NetworkManager.Singleton;
 
+        if (networkManager == null || networkManager.IsServer)
+            return;
+
+        if (returningToLobby)
+        {
+            ShowLobbyPanels();
+            return;
+        }
+
+        returningToLobby = true;
+
+        try
+        {
+            if (multiplayerManager == null)
+            {
+                multiplayerManager = FindAnyObjectByType<ChessMultiplayerManager>();
+            }
+
+            if (multiplayerManager != null)
+            {
+                await multiplayerManager.LeaveRoom();
+            }
+
+        }
+
+        finally
+        {
+            ShowLobbyPanels();
+        }  
+
+    }
+
+    private async void ReturnToLobbyAfterGameEnd()
+    {
+        if (returningToLobby)
+            return;
+
+        returningToLobby = true;
+
+        await Task.Delay(750);
+
+        try
+        {
+            if (multiplayerManager == null)
+            {
+                multiplayerManager = FindAnyObjectByType<ChessMultiplayerManager>();
+            }
+
+            if (multiplayerManager != null)
+            {
+                await multiplayerManager.LeaveRoom();
+            }
+            else if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            {
+                NetworkManager.Singleton.Shutdown();
+            }
+        }
+
+        finally 
+        {
+            if (gameControlsPanel != null)
+                gameControlsPanel.SetActive(false);
+
+            if (drawOfferPanel != null)
+                drawOfferPanel.SetActive(false);
+
+            if (gameOverPanel != null)
+                gameOverPanel.SetActive(false);
+
+            ShowLobbyPanels();
+        }
+    }
 }
 
 

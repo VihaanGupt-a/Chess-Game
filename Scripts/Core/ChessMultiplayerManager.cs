@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using UnityEngine;
+using Unity.Netcode;
 using Unity.Services.Core;
 using Unity.Services.Authentication;
 using Unity.Services.Multiplayer;
@@ -9,6 +10,8 @@ public class ChessMultiplayerManager : MonoBehaviour
 {
 
     private ISession currentSession;
+    public System.Action RoomLeft;
+
     public bool IsInSession => currentSession != null;
     
     public System.Action<string> RoomCodeCreated;
@@ -67,6 +70,38 @@ public class ChessMultiplayerManager : MonoBehaviour
         catch (Exception e)
         {
             Debug.LogError($"Could not join room: {e}");
+        }
+    }
+
+    public async Task LeaveRoom()
+    {
+        ISession session = currentSession;
+        currentSession = null;
+
+        try
+        {
+            if (session != null)
+            {
+                await session.LeaveAsync();
+            }
+            else if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            {
+                NetworkManager.Singleton.Shutdown();
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Could not leave room : {e}");
+
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            {
+                NetworkManager.Singleton.Shutdown();
+            }
+        }
+
+        finally
+        {
+            RoomLeft?.Invoke();
         }
     }
 

@@ -23,6 +23,7 @@ public class RoomCodeDisplay : MonoBehaviour
         }
 
         multiplayerManager.RoomCodeCreated += DisplayRoomCode;
+        multiplayerManager.RoomLeft += ClearCode;
     }
 
     private void OnDestroy()
@@ -30,6 +31,7 @@ public class RoomCodeDisplay : MonoBehaviour
         if (multiplayerManager != null)
         {
             multiplayerManager.RoomCodeCreated -= DisplayRoomCode;
+            multiplayerManager.RoomLeft -= ClearCode;
         }
     }
 
