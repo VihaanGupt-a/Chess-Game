@@ -55,12 +55,28 @@ public class ChessGameEndController : NetworkBehaviour
 
     public override void OnNetworkSpawn()
     {
-        if (IsServer)
-        {
-            gameState.Value = Playing;
-            drawOfferFrom.Value = NoOffer;
-            resultReason.Value = NoReason;
-        }
+        // if (IsServer)
+        // {
+        //     gameState.Value = Playing;
+        //     drawOfferFrom.Value = NoOffer;
+        //     resultReason.Value = NoReason;
+        // }
+
+        gameState.OnValueChanged += OnGameStateChanged;
+
+        UpdateUI();
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        gameState.OnValueChanged -= OnGameStateChanged;
+    }
+
+    private void OnGameStateChanged(int previousValue, int newValue)
+    {
+        Debug.Log($"[DRAW DEBUG] Game state changed: {previousValue} -> {newValue}. " +
+              $"OfferFrom={drawOfferFrom.Value}, IsServer={IsServer}, " +
+              $"IsClient={IsClient}, LocalClient={NetworkManager.Singleton?.LocalClientId}");
 
         UpdateUI();
     }
@@ -143,25 +159,62 @@ public class ChessGameEndController : NetworkBehaviour
     }
 
 
+    
     [ServerRpc(RequireOwnership = false)]
     private void OfferDrawServerRpc(ServerRpcParams rpcParams = default)
     {
-        if (!IsServer || gameState.Value != Playing)
-            return;
-
         ulong sender = rpcParams.Receive.SenderClientId;
 
-        if (!IsAssignedPlayer(sender))
-            return;
+        bool assigned = IsAssignedPlayer(sender);
+        int connectedCount = NetworkManager.Singleton != null
+            ? NetworkManager.Singleton.ConnectedClientsIds.Count
+            : 0;
 
-        if (NetworkManager.Singleton == null || NetworkManager.Singleton.ConnectedClientsIds.Count < 2)
+        Debug.Log(
+            $"[DRAW TRACE] RPC received | Sender={sender} | " +
+            $"Assigned={assigned} | Connected={connectedCount} | " +
+            $"State={gameState.Value} | IsServer={IsServer}"
+        );
+
+        if (!IsServer)
+        {
+            Debug.LogWarning("[DRAW TRACE] Rejected: not server.");
             return;
+        }
+
+        if (gameState.Value != Playing)
+        {
+            Debug.LogWarning(
+                $"[DRAW TRACE] Rejected: state is {gameState.Value}, not Playing."
+            );
+            return;
+        }
+
+        if (!assigned)
+        {
+            Debug.LogWarning(
+                $"[DRAW TRACE] Rejected: player {sender} has no assigned color."
+            );
+            return;
+        }
+
+        if (connectedCount < 2)
+        {
+            Debug.LogWarning(
+                $"[DRAW TRACE] Rejected: only {connectedCount} client(s) connected."
+            );
+            return;
+        }
 
         drawOfferFrom.Value = sender;
         gameState.Value = DrawOffered;
 
-        Debug.Log($"Draw Offered by client {sender}.");
+        Debug.Log(
+            $"[DRAW TRACE] SUCCESS | State={gameState.Value} | " +
+            $"OfferFrom={drawOfferFrom.Value}"
+        );
     }
+
 
     [ServerRpc(RequireOwnership = false)]
     private void RespondToDrawServerRpc(bool accept, ServerRpcParams rpcParams = default)
@@ -277,6 +330,14 @@ public class ChessGameEndController : NetworkBehaviour
 
     private void UpdateUI()
     {
+
+        Debug.Log(
+            $"[DRAW UI] IsServer={IsServer}, IsClient={IsClient}, " +
+            $"IsSpawned={IsSpawned}, State={gameState.Value}, " +
+            $"OfferFrom={drawOfferFrom.Value}, " +
+            $"LocalClient={NetworkManager.Singleton?.LocalClientId}"
+        );
+
         ulong localClientId = NetworkManager.Singleton != null
             ? NetworkManager.Singleton.LocalClientId
             : NoOffer;
@@ -286,7 +347,12 @@ public class ChessGameEndController : NetworkBehaviour
         bool ended = IsGameOver();
 
         SetActiveIfNeeded(gameControlsPanel, playing);
-        SetActiveIfNeeded(drawOfferPanel, offering);
+
+        bool isOfferer = offering && drawOfferFrom.Value == localClientId;
+        bool isOpponent = offering && drawOfferFrom.Value != localClientId;
+
+        SetActiveIfNeeded(drawOfferPanel, isOfferer || isOpponent);
+
         SetActiveIfNeeded(gameOverPanel, ended);
 
         if (offering && drawOfferText != null)
